@@ -1,0 +1,8 @@
+[package]
+name = "rundown"
+version = "0.0.0"
+authors = ["Ian Henry <ianthehenry@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+pulldown-cmark = { version = "0.8", default-features = false, features = ["simd"] }
