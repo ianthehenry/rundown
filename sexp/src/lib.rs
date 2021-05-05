@@ -146,9 +146,214 @@ fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
 #[cfg(test)]
 mod tests {
     use super::{tokenize, Token};
+    use k9;
 
     #[test]
-    fn single_atom() {
-        assert_eq!(tokenize("hello"), Ok(vec![Token::BareAtom(0..5)]));
+    fn tokenize_atom() {
+        k9::snapshot!(
+            tokenize("hello"),
+            "
+Ok(
+    [
+        BareAtom(
+            0..5,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn tokenize_string() {
+        k9::snapshot!(
+            tokenize(r#""hello""#),
+            "
+Ok(
+    [
+        StringLiteral(
+            0..=6,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn tokenize_parens() {
+        k9::snapshot!(
+            tokenize(")()("),
+            "
+Ok(
+    [
+        CloseParen(
+            0,
+        ),
+        OpenParen(
+            1,
+        ),
+        CloseParen(
+            2,
+        ),
+        OpenParen(
+            3,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn string_escapes_work() {
+        k9::snapshot!(
+            tokenize(r#" "hello \"world\" \\" "#),
+            "
+Ok(
+    [
+        StringLiteral(
+            1..=20,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn unterminated_strings() {
+        k9::snapshot!(
+            tokenize(r#" "hello "#),
+            "
+Err(
+    UnclosedString(
+        1,
+    ),
+)
+"
+        );
+        k9::snapshot!(
+            tokenize(r#" "hello\"#),
+            "
+Err(
+    UnclosedString(
+        1,
+    ),
+)
+"
+        );
+    }
+
+    #[test]
+    fn tokenize_mix() {
+        k9::snapshot!(
+            tokenize(r#"(hello "world")"something" ) "#),
+            "
+Ok(
+    [
+        OpenParen(
+            0,
+        ),
+        BareAtom(
+            1..6,
+        ),
+        StringLiteral(
+            7..=13,
+        ),
+        CloseParen(
+            14,
+        ),
+        StringLiteral(
+            15..=25,
+        ),
+        CloseParen(
+            27,
+        ),
+    ],
+)
+"
+        );
+        k9::snapshot!(
+            tokenize(r#" "hello\"#),
+            "
+Err(
+    UnclosedString(
+        1,
+    ),
+)
+"
+        );
+    }
+
+    #[test]
+    fn quotes_can_snuggle_atoms() {
+        k9::snapshot!(
+            tokenize(r#"atom"string"atom"#),
+            "
+Ok(
+    [
+        BareAtom(
+            0..4,
+        ),
+        StringLiteral(
+            4..=11,
+        ),
+        BareAtom(
+            12..16,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn normal_whitespace_separates_atoms() {
+        k9::snapshot!(
+            tokenize("a b\nc\td"),
+            "
+Ok(
+    [
+        BareAtom(
+            0..1,
+        ),
+        BareAtom(
+            2..3,
+        ),
+        BareAtom(
+            4..5,
+        ),
+        BareAtom(
+            6..7,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn unicode_whitespace_separates_atoms() {
+        k9::snapshot!(
+            // U+2009 is "THIN SPACE"
+            // U+2029 is "PARAGRAPH SEPARATOR"
+            tokenize("a\u{2009}b\u{2029}c"),
+            "
+Ok(
+    [
+        BareAtom(
+            0..1,
+        ),
+        BareAtom(
+            2..3,
+        ),
+        BareAtom(
+            4..9,
+        ),
+    ],
+)
+"
+        );
     }
 }
