@@ -16,8 +16,8 @@ pub enum Token {
 #[derive(Copy, Clone)]
 enum TokenizationState {
     Boring,
-    InString { start: usize, quotesy: bool },
-    InBareAtom { start: usize },
+    InString(usize, bool),
+    InBareAtom(usize),
 }
 
 enum CharacterInterpretation {
@@ -28,17 +28,14 @@ enum CharacterInterpretation {
     AtomCharacter,
 }
 
-fn interpret(character: char) -> CharacterInterpretation {
+fn interpret(c: char) -> CharacterInterpretation {
     use CharacterInterpretation::*;
-    if character.is_whitespace() {
-        Whitespace
-    } else {
-        match character {
-            '"' => BeginString,
-            '(' => OpenParen,
-            ')' => CloseParen,
-            _ => AtomCharacter,
-        }
+    match c {
+        '"' => BeginString,
+        '(' => OpenParen,
+        ')' => CloseParen,
+        c if c.is_whitespace() => Whitespace,
+        _ => AtomCharacter,
     }
 }
 
@@ -59,49 +56,25 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
     let mut tokens: Vec<Token> = Vec::new();
     for (i, character) in input.char_indices() {
         match state {
-            InString {
-                start,
-                quotesy: true,
-            } => {
-                state = InString {
-                    start,
-                    quotesy: false,
+            InString(start, true) => state = InString(start, false),
+            InString(start, false) => match character {
+                '\\' => state = InString(start, true),
+                '"' => {
+                    tokens.push(Token::StringLiteral(start + 1..i));
+                    state = Boring;
                 }
-            }
-            InString {
-                start,
-                quotesy: false,
-            } => {
-                match character {
-                    '\\' => {
-                        state = InString {
-                            start,
-                            quotesy: true,
-                        }
-                    }
-                    '"' => {
-                        // should we include the closing quote or not?
-                        tokens.push(Token::StringLiteral(start + 1..i));
-                        state = Boring;
-                    }
-                    _ => (),
-                }
-            }
-            Boring | InBareAtom { .. } => {
+                _ => (),
+            },
+            Boring | InBareAtom(_) => {
                 let interpretation = interpret(character);
 
                 if interpretation.should_end_atom() {
-                    if let InBareAtom { start } = state {
+                    if let InBareAtom(start) = state {
                         tokens.push(Token::BareAtom(start..i))
                     }
                 }
                 match interpretation {
-                    BeginString => {
-                        state = InString {
-                            start: i,
-                            quotesy: false,
-                        }
-                    }
+                    BeginString => state = InString(i, false),
                     OpenParen => {
                         tokens.push(Token::OpenParen(i));
                         state = Boring
@@ -113,7 +86,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
                     Whitespace => state = Boring,
                     AtomCharacter => {
                         if let Boring = state {
-                            state = InBareAtom { start: i }
+                            state = InBareAtom(i)
                         }
                     }
                 }
@@ -122,8 +95,8 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
     }
     match state {
         Boring => Ok(tokens),
-        InString { start, quotesy: _ } => Err(TokenizationError::UnclosedString(start)),
-        InBareAtom { start } => {
+        InString(start, _) => Err(TokenizationError::UnclosedString(start)),
+        InBareAtom(start) => {
             tokens.push(Token::BareAtom(start..input.len()));
             Ok(tokens)
         }
