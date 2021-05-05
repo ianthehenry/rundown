@@ -91,7 +91,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
     use TokenizationState::*;
     let mut state = Boring;
     let mut tokens: Vec<Token> = Vec::new();
-    for (i, character) in input.chars().enumerate() {
+    for (i, character) in input.char_indices() {
         match state {
             InString {
                 start,
@@ -214,7 +214,7 @@ pub fn parse_many(input: &str) -> Result<Vec<Sexp>, Error> {
 
 #[cfg(test)]
 mod tokenizer_tests {
-    use super::{tokenize, Token};
+    use super::{tokenize};
     use k9;
 
     #[test]
@@ -415,10 +415,10 @@ Ok(
             0..1,
         ),
         BareAtom(
-            2..3,
+            4..5,
         ),
         BareAtom(
-            4..9,
+            8..9,
         ),
     ],
 )
@@ -429,7 +429,7 @@ Ok(
 
 #[cfg(test)]
 mod parser_tests {
-    use super::{parse_many, Sexp};
+    use super::{parse_many};
     use k9;
 
     #[test]
@@ -552,6 +552,32 @@ Err(
     ),
 )
 "
+        );
+    }
+
+    #[test]
+    fn unicode() {
+        k9::snapshot!(
+            parse_many(r#"🙂 (🙃) "🧵" "#),
+            r#"
+Ok(
+    [
+        Atom(
+            "🙂",
+        ),
+        List(
+            [
+                Atom(
+                    "🙃",
+                ),
+            ],
+        ),
+        Atom(
+            "🧵",
+        ),
+    ],
+)
+"#
         );
     }
 }
