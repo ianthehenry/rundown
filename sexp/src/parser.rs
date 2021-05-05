@@ -9,6 +9,8 @@ pub enum ParseError {
     UnknownEscape(Range<usize>),
 }
 
+// TODO: I should write my own unescaper, with a proper error type
+// that actually gives some information about the error that occurred.
 fn resolve_string_literal(string: &str) -> Option<String> {
     unescape::unescape(string)
 }

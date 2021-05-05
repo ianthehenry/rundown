@@ -131,7 +131,7 @@ pub fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
 }
 
 #[cfg(test)]
-mod tokenizer_tests {
+mod tests {
     use super::tokenize;
     use k9;
 
