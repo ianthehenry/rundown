@@ -249,3 +249,66 @@ I tried to add `k9` as a dependency to write some snapshot tests. But I get this
 ```
 
 Which I've definitely seen before, using `nix-shell -p`. I added `libiconv` to my list of `nix-shell -p` and that fixed it. I should probably write a `shell.nix` file...
+
+---
+
+Hmm. To parse, I tried to write something like this:
+
+```rust
+fn parse_list(tokens : &mut dyn Iterator<Item = Token>) -> Result<Vec<Sexp>, ParseError> {
+    use Token::*;
+    let mut sexps: Vec<Sexp> = Vec::new();
+    for token in tokens {
+        match token {
+            CloseParen(_) => return Ok(sexps),
+            OpenParen(start) => {
+                match parse_list(tokens) {
+                    Ok(list) => sexps.push(Sexp::List(list)),
+                    Err(_) => return Err(ParseError::UnclosedParen(start))
+                }
+            }
+            BareAtom(_range) =>
+                sexps.push(Sexp::Atom("")),
+            StringLiteral(_range) =>
+                sexps.push(Sexp::Atom("")),
+        }
+    }
+    Err(ParseError::UnclosedParen(0))
+}
+```
+
+Basically I want the inner call to `parse_list` to advance the `tokens` iterator.
+
+But I don't really think I can do that. Even though there's only one mutable borrow *at a time*.
+
+I got it down to this simpler thing
+:
+
+```rust
+fn parse_list<'a>(input: &'a str, mut tokens : &mut core::slice::Iter<Token>) -> Result<Vec<Sexp<'a>>, ParseError> {
+    use Token::*;
+    let mut sexps: Vec<Sexp> = Vec::new();
+    for token in &mut tokens {
+        match token {
+            CloseParen(_) => return Ok(sexps),
+            OpenParen(start) => {
+                match parse_list(input, tokens) {
+                    Ok(list) => sexps.push(Sexp::List(list)),
+                    Err(_) => return Err(ParseError::UnclosedParen(*start))
+                }
+            }
+            BareAtom(_range) =>
+                sexps.push(Sexp::Atom("")),
+            StringLiteral(_range) =>
+                sexps.push(Sexp::Atom("")),
+        }
+    }
+    Err(ParseError::UnclosedParen(0))
+}
+```
+
+I don't understand why I need so many `mut`s there. The mutable borrow in the `for` is to get around an implicit call to `into_iter`. (I don't understand why I need that in the first place.)
+
+Anyway, I think I'm going to abandon this approach and just explicitly return a "rest" iterator.
+
+That worked just fine.
