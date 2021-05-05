@@ -224,3 +224,28 @@ Which, whatever, but why doesn't a method call allow a module disambiguation?
 Okay. I now have something that can parse markdown coming in and print markdown going back out. And the markdown going out is identical to the markdown coming in, theoretically. And we also extract all code block contents.
 
 It could basically be a de-tangler, at this point. A way to extract blocks of code from markdown.
+
+# 2021-05-04
+
+Tried using `ssexp` to parse info strings. It's *close*, but it's quite a bit more complicated than I need. Despite the complexity, I can't figure out any way to get it to support strings -- the `with_strings` "macro map" it has *sort of* supports strings, but there's no way to escape double quotes -- `"\""` -- within such strings. No way to suppress the delimiter, that I can find.
+
+I just want something that gives me the OCaml view of a sexp. Lists and atoms. `lexpr` looks waaaay too complicated.
+
+This is kind of a hilarious thing to rely on an external package for. It's such a trivial parser to write. Might be good exercise to do it in Rust.
+
+I started doing that, a little bit, but it's late. I am kind of hilariously rusty at programming, regardless of the Rust slowing me down. This is a very trivial thing that I have definitely implemented before without trouble, but my brain is unable to wrap my head around it right now.
+
+I got the second dose of the Pfizer COVID-19 vaccine about twelve hours ago. It *might* be hitting me.
+
+# 2021-05-05
+
+Man. I am having a lot of trouble getting used to colons in structs. I write `=` every time.
+
+I tried to add `k9` as a dependency to write some snapshot tests. But I get this error:
+
+```
+= note: ld: library not found for -liconv
+        clang-7: error: linker command failed with exit code 1 (use -v to see invocation)
+```
+
+Which I've definitely seen before, using `nix-shell -p`. I added `libiconv` to my list of `nix-shell -p` and that fixed it. I should probably write a `shell.nix` file...
