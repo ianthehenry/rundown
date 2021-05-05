@@ -312,3 +312,9 @@ I don't understand why I need so many `mut`s there. The mutable borrow in the `f
 Anyway, I think I'm going to abandon this approach and just explicitly return a "rest" iterator.
 
 That worked just fine.
+
+---
+
+Now all I need to do is handle string escapes properly...
+
+I found a crate from five years ago that *mostly* does what I want. It doesn't support unicode codepoints greater than `U+FFFF`, but whatever. Easy enough to swap it out or write my own if I ever care.

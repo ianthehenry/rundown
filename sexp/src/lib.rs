@@ -1,9 +1,9 @@
 use std::ops::Range;
 
 #[derive(Debug)]
-pub enum Sexp<'a> {
-    Atom(&'a str),
-    List(Vec<Sexp<'a>>),
+pub enum Sexp {
+    Atom(String),
+    List(Vec<Sexp>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -15,6 +15,7 @@ enum TokenizationError {
 enum ParseError {
     UnclosedParen(usize),
     ExtraCloseParen(usize),
+    UnknownEscape(Range<usize>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -22,6 +23,7 @@ pub enum Error {
     UnclosedParen(usize),
     ExtraCloseParen(usize),
     UnclosedString(usize),
+    UnknownEscape(Range<usize>),
 }
 impl Error {
     fn of_tokenization_error(e: TokenizationError) -> Error {
@@ -35,6 +37,7 @@ impl Error {
         match e {
             UnclosedParen(i) => Error::UnclosedParen(i),
             ExtraCloseParen(i) => Error::ExtraCloseParen(i),
+            UnknownEscape(range) => Error::UnknownEscape(range),
         }
     }
 }
@@ -165,8 +168,8 @@ fn tokenize(input: &str) -> Result<Vec<Token>, TokenizationError> {
 }
 
 // TODO
-fn resolve_string_literal(string: &str) -> &str {
-    return string;
+fn resolve_string_literal(string: &str) -> Option<String> {
+    unescape::unescape(string)
 }
 
 enum StopReason {
@@ -177,7 +180,7 @@ enum StopReason {
 fn parse_forms<'a, 'b>(
     input: &'a str,
     mut tokens: core::slice::Iter<'b, Token>,
-) -> Result<(Vec<Sexp<'a>>, core::slice::Iter<'b, Token>, StopReason), ParseError> {
+) -> Result<(Vec<Sexp>, core::slice::Iter<'b, Token>, StopReason), ParseError> {
     use Token::*;
     let mut sexps: Vec<Sexp> = Vec::new();
 
@@ -191,10 +194,14 @@ fn parse_forms<'a, 'b>(
                     tokens = rest;
                 }
             },
-            BareAtom(range) => sexps.push(Sexp::Atom(&input[range.clone()])),
-            StringLiteral(range) => {
-                sexps.push(Sexp::Atom(resolve_string_literal(&input[range.clone()])))
+            BareAtom(range) => {
+                let atom = input[range.clone()].to_string();
+                sexps.push(Sexp::Atom(atom))
             }
+            StringLiteral(range) => match resolve_string_literal(&input[range.clone()]) {
+                None => return Err(ParseError::UnknownEscape(range.clone())),
+                Some(string) => sexps.push(Sexp::Atom(string)),
+            },
         }
     }
     Ok((sexps, tokens, StopReason::EndOfInput))
@@ -214,7 +221,7 @@ pub fn parse_many(input: &str) -> Result<Vec<Sexp>, Error> {
 
 #[cfg(test)]
 mod tokenizer_tests {
-    use super::{tokenize};
+    use super::tokenize;
     use k9;
 
     #[test]
@@ -283,6 +290,22 @@ Ok(
     [
         StringLiteral(
             2..20,
+        ),
+    ],
+)
+"
+        );
+    }
+
+    #[test]
+    fn arbitrary_string_escapes_tokenize() {
+        k9::snapshot!(
+            tokenize(r#" "\a" "#),
+            "
+Ok(
+    [
+        StringLiteral(
+            2..4,
         ),
     ],
 )
@@ -429,7 +452,7 @@ Ok(
 
 #[cfg(test)]
 mod parser_tests {
-    use super::{parse_many};
+    use super::parse_many;
     use k9;
 
     #[test]
@@ -535,6 +558,52 @@ Err(
 Err(
     UnclosedString(
         1,
+    ),
+)
+"
+        );
+    }
+
+    #[test]
+    fn string_escapes() {
+        k9::snapshot!(
+            parse_many(r#" "\n \"\u263A\" \t \\" "#),
+            r#"
+Ok(
+    [
+        Atom(
+            "
+ "☺" \t \",
+        ),
+    ],
+)
+"#
+        );
+    }
+
+    #[test]
+    fn string_escapes_only_support_four_digit_unicode() {
+        // TODO... but pretty minor
+        k9::snapshot!(
+            parse_many(r#" "\n \U1F642 \t" "#),
+            "
+Err(
+    UnknownEscape(
+        2..15,
+    ),
+)
+"
+        );
+    }
+
+    #[test]
+    fn bad_string_escape() {
+        k9::snapshot!(
+            parse_many(r#" "\a" "#),
+            "
+Err(
+    UnknownEscape(
+        2..4,
     ),
 )
 "
