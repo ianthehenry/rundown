@@ -23,16 +23,16 @@ enum Component<'a> {
 
 mod parser {
     use super::CodeBlockFlavor;
-    use super::Component as SuperComponent;
+    use super::Component;
     use core::ops::Range;
     use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag};
 
-    enum Component<'a> {
+    enum RangeComponent<'a> {
         LiteralText(Range<usize>),
         CodeBlock(CodeBlockKind<'a>, Range<usize>, String),
     }
 
-    pub(crate) fn to_components(input: &str) -> Box<dyn Iterator<Item = SuperComponent> + '_> {
+    pub(crate) fn to_components(input: &str) -> Box<dyn Iterator<Item = Component> + '_> {
         let parser = Parser::new_ext(input, Options::empty());
 
         // I don't like that I'm accumulating into a Vec here. I want
@@ -40,27 +40,30 @@ mod parser {
         // know how. Or just as a generator? I think the two-pass
         // approach is much cleaner but I don't know how to write it
         // without eagerly consuming the entire parser.
-        let mut vec: Vec<Component> = Vec::new();
-        let mut current_component: Component = Component::LiteralText(0..0);
+        let mut vec: Vec<RangeComponent> = Vec::new();
+        let mut current_component: RangeComponent = RangeComponent::LiteralText(0..0);
 
         for (event, offset) in parser.into_offset_iter() {
             match (&mut current_component, event) {
-                (Component::LiteralText(current_range), Event::Start(Tag::CodeBlock(kind))) => {
+                (
+                    RangeComponent::LiteralText(current_range),
+                    Event::Start(Tag::CodeBlock(kind)),
+                ) => {
                     current_range.end = offset.start;
                     vec.push(current_component);
-                    current_component = Component::CodeBlock(kind, offset, String::new());
+                    current_component = RangeComponent::CodeBlock(kind, offset, String::new());
                 }
-                (Component::LiteralText(current_range), _) => {
+                (RangeComponent::LiteralText(current_range), _) => {
                     current_range.end = std::cmp::max(current_range.end, offset.end);
                 }
-                (Component::CodeBlock(_, _, _), Event::End(Tag::CodeBlock(_))) => {
+                (RangeComponent::CodeBlock(_, _, _), Event::End(Tag::CodeBlock(_))) => {
                     vec.push(current_component);
-                    current_component = Component::LiteralText(offset.end..offset.end);
+                    current_component = RangeComponent::LiteralText(offset.end..offset.end);
                 }
-                (Component::CodeBlock(_, _, current_body), Event::Text(new_text)) => {
+                (RangeComponent::CodeBlock(_, _, current_body), Event::Text(new_text)) => {
                     current_body.push_str(&new_text);
                 }
-                (Component::CodeBlock(_, _, _), event) => {
+                (RangeComponent::CodeBlock(_, _, _), event) => {
                     panic!("unexpected Event inside code block: {:?}", event)
                 }
             }
@@ -68,14 +71,21 @@ mod parser {
 
         // make sure we include all trailing whitespace
         match &mut current_component {
-            Component::LiteralText(final_range) => final_range.end = input.len(),
-            Component::CodeBlock(_, _, _) => panic!("no closing code end tag"),
+            RangeComponent::LiteralText(final_range) => final_range.end = input.len(),
+            RangeComponent::CodeBlock(_, _, _) => panic!("no closing code end tag"),
         }
         vec.push(current_component);
 
-        Box::new(vec.into_iter().map(move |component| match component {
-            Component::LiteralText(range) => SuperComponent::LiteralText(&input[range]),
-            Component::CodeBlock(kind, offset, body) => {
+        Box::new(
+            vec.into_iter()
+                .map(move |component| resolve_component(component, input)),
+        )
+    }
+
+    fn resolve_component<'a>(component: RangeComponent<'a>, input: &'a str) -> Component<'a> {
+        match component {
+            RangeComponent::LiteralText(range) => Component::LiteralText(&input[range]),
+            RangeComponent::CodeBlock(kind, offset, body) => {
                 let source = &input[offset.clone()];
 
                 let flavor = match kind {
@@ -98,9 +108,9 @@ mod parser {
                         }
                     }
                 };
-                SuperComponent::CodeBlock(source, flavor, body)
+                Component::CodeBlock(source, flavor, body)
             }
-        }))
+        }
     }
 }
 
