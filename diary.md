@@ -114,7 +114,7 @@ Oh, ha. I've been using `camelCase` this whole time. I forgot Rust is snake case
 
 ---
 
-Why the hell do I have to clone `widest_range` in order to index with it? why does indexing need to take ownership of the range?
+Why the hell do I have to clone `widest_range` in order to index with it? Why does indexing need to take ownership of the range?
 
 ```rust
 let widest_range = current_range.start..offset.start;
@@ -233,13 +233,15 @@ I just want something that gives me the OCaml view of a sexp. Lists and atoms. `
 
 This is kind of a hilarious thing to rely on an external package for. It's such a trivial parser to write. Might be good exercise to do it in Rust.
 
-I started doing that, a little bit, but it's late. I am kind of hilariously rusty at programming, regardless of the Rust slowing me down. This is a very trivial thing that I have definitely implemented before without trouble, but my brain is unable to wrap my head around it right now.
+I started doing that, a little bit, but it's late. I am laughably rusty at programming, regardless of the Rust slowing me down. This is a very trivial thing that I have definitely implemented before without trouble, but my brain is unable to wrap my head around it right now.
 
 I got the second dose of the Pfizer COVID-19 vaccine about twelve hours ago. It *might* be hitting me.
 
 # 2021-05-05
 
 Man. I am having a lot of trouble getting used to colons in structs. I write `=` every time.
+
+---
 
 I tried to add `k9` as a dependency to write some snapshot tests. But I get this error:
 
@@ -281,8 +283,7 @@ Basically I want the inner call to `parse_list` to advance the `tokens` iterator
 
 But I don't really think I can do that. Even though there's only one mutable borrow *at a time*.
 
-I got it down to this simpler thing
-:
+I got it down to this simpler thing:
 
 ```rust
 fn parse_list<'a>(input: &'a str, mut tokens : &mut core::slice::Iter<Token>) -> Result<Vec<Sexp<'a>>, ParseError> {
@@ -317,4 +318,116 @@ That worked just fine.
 
 Now all I need to do is handle string escapes properly...
 
-I found a crate from five years ago that *mostly* does what I want. It doesn't support unicode codepoints greater than `U+FFFF`, but whatever. Easy enough to swap it out or write my own if I ever care.
+I found a crate from five years ago that *mostly* does what I want. It doesn't support unicode codepoints greater than `U+FFFF`, but whatever. It also gives no useful error message on a parse error. Easy enough to swap it out or write my own if I ever care.
+
+---
+
+This looks like a very nice way to parse command-line arguments:
+
+    https://docs.rs/structopt/0.3.21/structopt
+
+Once it comes time to make an actual executable.
+
+But first: I should probably figure out how to make child processes.
+
+---
+
+Okay, doing "run this command; get this output" is pretty trivial.
+
+Not trivial: repls (which I use a lot) and shared code "sessions" (something like org-babel).
+
+I'm going to focus on repls first because it's more my immediate use case, and it *feels* more general even though, in a way, it's sort of a much simpler thing.
+
+So I looked at `expect`, and I *think* it should work alright.
+
+I made this little script:
+
+```tcl
+set timeout -1
+log_user 0
+spawn nix repl
+match_max 100000
+
+set prompt "nix-repl> "
+
+expect $prompt
+log_user 1
+send_user $prompt
+send -- "1 +\n2\n"
+expect $prompt
+send -- "pkgs = import <nixpkgs> {}\n"
+expect $prompt
+send -- "3 + 4\n"
+expect $prompt
+```
+
+Running that gives me pretty much the output that I want. So I can "compile" something like this:
+
+    ```
+    nix-repl> 1 +
+              2
+    3
+
+    nix-repl> pkgs = import <nixpkgs> {}
+
+    nix-repl> 3 + 4
+    7
+    ```
+
+Into the expect script above. `PS1="nix-repl> "`, `PS2="          "`. Just error if there's ever any ambiguity -- which you can easily check by making sure you can parse out the same set of "inputs" that you put into it.
+
+But how do we pause if a repl session is split?
+
+I really don't like the `expect` docs. And the web page is down. It seems like it's not really real software. But it's installed by default even on macOS, so.
+
+I might have to learn some tcl. It's so *weird*. 
+
+I don't know how to `expect` from within Rust. It doesn't seem that there are any bindings to `libexpect`. I can see that there is a crate called `reckon` which... implements a tiny subset that I don't think I can use. And doesn't seem to use a pty. Does expect use a pty? I don't know. I think it must, right? I will need to figure out a way to change its width.
+
+I figured out a way to "pause" the script:
+
+```tcl
+set x 0
+proc unpause [] {
+  upvar x x
+  send_user "trying to unpause"
+  set x 1
+}
+trap unpause SIGUSR1
+
+while {$x == 0} {
+  sleep 1
+}
+
+send -- "3 + 4\n"
+expect $prompt
+expect eof
+```
+
+The sleep is gross, but in reality it would probably go very quickly. `rundown` isn't going to keep it paused.
+
+Wait! Reading tcl docs taught me `vwait` -- which does exactly what I was trying to do, in a more real way. I think I can get by with this:
+
+```tcl
+global x
+proc unpause [] {
+  global x
+  set x 0
+}
+trap unpause SIGUSR1
+
+flush stdout
+flush stderr
+vwait x
+```
+
+I still wish I could just `raise SIGSTOP` and then sent `SIGCONT` -- although that might give me grief with buffering? In case of a nonblocking stdout? I have no idea how flushing works. So it might actually be better this way? In any case I can't find a `raise` equivalent in tcl, and I really don't want to shell out just to invoke `kill` on myself.
+
+---
+
+Huh. Should prompt detection be a regular expression? It seems like a reasonable option. `irb`, out of the box, has an incrementing count. `irb --simple-prompt` fixes it, but it might still be worth doing something about.
+
+---
+
+I also... I am being a little naïve here. It *seems* to work so nicely because I am printing to a terminal, and the terminal is handling things like `\r`. I might need something like https://crates.io/crates/vte to actually get decent output out of this.
+
