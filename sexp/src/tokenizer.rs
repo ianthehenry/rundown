@@ -41,11 +41,7 @@ fn interpret(c: char) -> CharacterInterpretation {
 
 impl CharacterInterpretation {
     fn should_end_atom(&self) -> bool {
-        use CharacterInterpretation::*;
-        match self {
-            AtomCharacter => false,
-            _ => true,
-        }
+        !matches!(self, CharacterInterpretation::AtomCharacter)
     }
 }
 

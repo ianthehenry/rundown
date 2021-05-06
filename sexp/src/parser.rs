@@ -22,9 +22,9 @@ enum StopReason {
     EndOfInput,
 }
 
-fn parse_forms<'a, 'b>(
-    input: &'a str,
-    tokens: &mut core::slice::Iter<'b, Token>,
+fn parse_forms(
+    input: &str,
+    tokens: &mut core::slice::Iter<Token>,
 ) -> Result<(Vec<Sexp>, StopReason), ParseError> {
     use Token::*;
     let mut sexps: Vec<Sexp> = Vec::new();
@@ -50,7 +50,7 @@ fn parse_forms<'a, 'b>(
 }
 
 pub fn parse_many_tokens(input: &str, tokens: Vec<Token>) -> Result<Vec<Sexp>, ParseError> {
-    match parse_forms(input, &mut tokens[..].into_iter())? {
+    match parse_forms(input, &mut tokens[..].iter())? {
         (_, StopReason::CloseParen(i)) => Err(ParseError::ExtraCloseParen(i)),
         (sexps, StopReason::EndOfInput) => Ok(sexps),
     }

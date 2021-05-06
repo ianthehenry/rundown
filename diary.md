@@ -470,3 +470,7 @@ Now, is there a way to do the same thing from a `for` loop? Why does a `for` loo
 Googling teaches me that it *seems* to be because `for` loops don't take iterators. They take `IntoIterator`s. And the API of `IntoIterator` requires that a `move` take place, even when the underlying type (here: `Iter`) already is an iterator.
 
 I'm pretty happy with this explanation. And `while let`/`.next()` is really not that bad. So I'll just stick with that.
+
+---
+
+I ran `clippy` for the first time. It taught me the `matches!` macro, and pointed out that (following my iterator refactor above) I no longer need to explicitly name lifetimes.
