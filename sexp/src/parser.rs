@@ -11,6 +11,8 @@ pub enum ParseError {
 
 // TODO: I should write my own unescaper, with a proper error type
 // that actually gives some information about the error that occurred.
+// Also I'm not sure if this handles line continuations? Which doesn't
+// matter for rundown but is important in general.
 fn resolve_string_literal(string: &str) -> Option<String> {
     unescape::unescape(string)
 }
