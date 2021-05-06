@@ -24,20 +24,17 @@ enum StopReason {
 
 fn parse_forms<'a, 'b>(
     input: &'a str,
-    mut tokens: core::slice::Iter<'b, Token>,
-) -> Result<(Vec<Sexp>, core::slice::Iter<'b, Token>, StopReason), ParseError> {
+    tokens: &mut core::slice::Iter<'b, Token>,
+) -> Result<(Vec<Sexp>, StopReason), ParseError> {
     use Token::*;
     let mut sexps: Vec<Sexp> = Vec::new();
 
     while let Some(token) = tokens.next() {
         match token {
-            CloseParen(index) => return Ok((sexps, tokens, StopReason::CloseParen(*index))),
+            CloseParen(index) => return Ok((sexps, StopReason::CloseParen(*index))),
             OpenParen(start) => match parse_forms(input, tokens)? {
-                (_, _, StopReason::EndOfInput) => return Err(ParseError::UnclosedParen(*start)),
-                (forms, rest, StopReason::CloseParen(_)) => {
-                    sexps.push(Sexp::List(forms));
-                    tokens = rest;
-                }
+                (_, StopReason::EndOfInput) => return Err(ParseError::UnclosedParen(*start)),
+                (forms, StopReason::CloseParen(_)) => sexps.push(Sexp::List(forms)),
             },
             BareAtom(range) => {
                 let atom = input[range.clone()].to_string();
@@ -49,12 +46,12 @@ fn parse_forms<'a, 'b>(
             },
         }
     }
-    Ok((sexps, tokens, StopReason::EndOfInput))
+    Ok((sexps, StopReason::EndOfInput))
 }
 
 pub fn parse_many_tokens(input: &str, tokens: Vec<Token>) -> Result<Vec<Sexp>, ParseError> {
-    match parse_forms(input, tokens[..].into_iter())? {
-        (_, _, StopReason::CloseParen(i)) => Err(ParseError::ExtraCloseParen(i)),
-        (sexps, _, StopReason::EndOfInput) => Ok(sexps),
+    match parse_forms(input, &mut tokens[..].into_iter())? {
+        (_, StopReason::CloseParen(i)) => Err(ParseError::ExtraCloseParen(i)),
+        (sexps, StopReason::EndOfInput) => Ok(sexps),
     }
 }

@@ -431,3 +431,42 @@ Huh. Should prompt detection be a regular expression? It seems like a reasonable
 
 I also... I am being a little naïve here. It *seems* to work so nicely because I am printing to a terminal, and the terminal is handling things like `\r`. I might need something like https://crates.io/crates/vte to actually get decent output out of this.
 
+# 2021-05-06
+
+It occurs to me that the dumb "return the rest of the iterator" thing I was doing *can't* be necessary, and the problem must be the `for` loop. But since I'm using a `while let`/`.next()` now, there's absolutely no reason why I can't borrow mutably.
+
+And it works!
+
+But I have to declare tokens as mutable and as a mutable borrow:
+
+```rust
+mut tokens: &mut core::slice::Iter<'b, Token>,
+```
+
+And then when I use it:
+
+```rust
+OpenParen(start) => match parse_forms(input, &mut tokens)? {
+```
+
+Which is... weird? I want to just like clone the *mutable borrow*. I'm re-borrowing, and then something's gotta be getting implicitly `Deref`'d, right?
+
+Ah! No. I can just do that. I don't know what I was thinking. Much simpler:
+
+```rust
+tokens: &mut core::slice::Iter<'b, Token>,
+```
+
+And then:
+
+```rust
+OpenParen(start) => match parse_forms(input, tokens)? {
+```
+
+Great. Great. That's what I want.
+
+Now, is there a way to do the same thing from a `for` loop? Why does a `for` loop behave any differently than a `while let`/`.next()`?
+
+Googling teaches me that it *seems* to be because `for` loops don't take iterators. They take `IntoIterator`s. And the API of `IntoIterator` requires that a `move` take place, even when the underlying type (here: `Iter`) already is an iterator.
+
+I'm pretty happy with this explanation. And `while let`/`.next()` is really not that bad. So I'll just stick with that.
