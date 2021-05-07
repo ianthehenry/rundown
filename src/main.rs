@@ -114,8 +114,19 @@ mod parser {
     }
 }
 
+use std::path::PathBuf;
+use structopt::StructOpt;
+#[derive(Debug, StructOpt)]
+#[structopt(name = "rundown")]
+struct Opt {
+    #[structopt(parse(from_os_str))]
+    input: PathBuf,
+}
+
 fn main() {
-    let input = fs::read_to_string("input.md").expect("Something went wrong reading the file");
+    let opt = Opt::from_args();
+
+    let input = fs::read_to_string(opt.input).expect("Something went wrong reading the file");
     let components = parser::to_components(&input);
 
     let stdout = std::io::stdout();
